@@ -1,0 +1,153 @@
+﻿@page "/todo-details/{todoId}"
+
+@using BlazorToDoList.App.Models
+@using BlazorToDoList.App.Services
+@inject TodoDetailService TodoDetailService
+@inject IJSRuntime JSRuntime
+
+<h1>Todo Details</h1>
+
+@if (todoDetails == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!todoDetails.Any())
+{
+    <p><em>No details available for this Todo item.</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Activity</th>
+                <th>Category</th>
+                <th>Detail Note</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var detail in todoDetails)
+            {
+                <tr>
+                    <td>@detail.Activity</td>
+                    <td>@detail.Category</td>
+                    <td>@detail.DetailNote</td>
+                    <td>
+                        <button class="btn btn-primary" @onclick="(() => OpenUpdateModal(detail))">Update</button>
+                        <button class="btn btn-danger" @onclick="(() => RemoveTodoDetail(detail.TodoDetailId))">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<input placeholder="Activity" @bind="@newDetailActivity" />
+<input placeholder="Category" @bind="@newDetailCategory" />
+<input placeholder="Detail Note" @bind="@newDetailNote" />
+<button class="btn btn-success" @onclick="AddTodoDetail">Add Detail</button>
+
+<!-- Update Modal -->
+<div class="modal fade" id="updateDetailModal" tabindex="-1" role="dialog" aria-labelledby="updateDetailModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="updateDetailModalLabel">Update Todo Detail</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input placeholder="Activity" @bind="updatedDetailActivity" class="form-control" />
+                <input placeholder="Category" @bind="updatedDetailCategory" class="form-control mt-2" />
+                <input placeholder="Detail Note" @bind="updatedDetailNote" class="form-control mt-2" />
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" @onclick="UpdateTodoDetailAsync">Save changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string TodoId { get; set; }
+    private List<TodoDetail> todoDetails;
+    private string newDetailActivity;
+    private string newDetailCategory;
+    private string newDetailNote;
+
+    private string updatedDetailActivity;
+    private string updatedDetailCategory;
+    private string updatedDetailNote;
+    private TodoDetail selectedDetail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTodoDetails();
+    }
+
+    private async Task LoadTodoDetails()
+    {
+        todoDetails = await TodoDetailService.GetTodoDetailsByTodoIdAsync(TodoId);
+    }
+
+    private async Task AddTodoDetail()
+    {
+        if (!string.IsNullOrWhiteSpace(newDetailActivity) && !string.IsNullOrWhiteSpace(newDetailCategory) && !string.IsNullOrWhiteSpace(newDetailNote))
+        {
+            var newTodoDetail = new TodoDetail
+                {
+                    TodoId = TodoId,
+                    Activity = newDetailActivity,
+                    Category = newDetailCategory,
+                    DetailNote = newDetailNote
+                };
+
+            var response = await TodoDetailService.AddTodoDetailAsync(newTodoDetail);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTodoDetails();
+                newDetailActivity = string.Empty;
+                newDetailCategory = string.Empty;
+                newDetailNote = string.Empty;
+            }
+        }
+    }
+
+    private async Task RemoveTodoDetail(string id)
+    {
+        var response = await TodoDetailService.DeleteTodoDetailAsync(id);
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTodoDetails();
+        }
+    }
+
+    private void OpenUpdateModal(TodoDetail detail)
+    {
+        selectedDetail = detail;
+        updatedDetailActivity = detail.Activity;
+        updatedDetailCategory = detail.Category;
+        updatedDetailNote = detail.DetailNote;
+        JSRuntime.InvokeVoidAsync("$('#updateDetailModal').modal", "show");
+    }
+
+    private async Task UpdateTodoDetailAsync()
+    {
+        if (selectedDetail != null && !string.IsNullOrWhiteSpace(updatedDetailActivity) && !string.IsNullOrWhiteSpace(updatedDetailCategory) && !string.IsNullOrWhiteSpace(updatedDetailNote))
+        {
+            selectedDetail.Activity = updatedDetailActivity;
+            selectedDetail.Category = updatedDetailCategory;
+            selectedDetail.DetailNote = updatedDetailNote;
+
+            var response = await TodoDetailService.UpdateTodoDetailAsync(selectedDetail);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTodoDetails();
+                JSRuntime.InvokeVoidAsync("$('#updateDetailModal').modal", "hide");
+            }
+        }
+    }
+}

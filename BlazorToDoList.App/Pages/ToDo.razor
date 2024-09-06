@@ -1,0 +1,186 @@
+﻿@page "/todo"
+
+@using BlazorToDoList.App.Services
+@using BlazorToDoList.App.Models
+@inject TodoService ToDoService
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+<body>
+
+</body>
+
+<h1>To-Do List</h1>
+
+@if (items == null)
+{
+    <p><em>Loading...</em></p>
+}
+else if (!items.Any())
+{
+    <p><em>No ToDo items exist. Please add some.</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Remove</th>
+                <th>Day</th>
+                <th>Note</th>
+                <th>Today Date</th>
+                <th>Detail Count</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var item in items)
+            {
+                <tr>
+                    <td><button @onclick="(() => RemoveTodo(item.TodoId))"><i class="oi oi-trash"></i></button></td>
+                    <td>@item.Day</td>
+                    <td>@item.Note</td>
+                    <td>@item.TodayDate</td> <!-- Generated on the backend -->
+                    <td>@item.TodoDetails.Count</td> <!-- DetailCount -->
+                    <td><button class="btn btn-primary" @onclick="(() => OpenUpdateModal(item))">Update</button></td
+                    <td><button class="btn btn-primary" @onclick="(() => NavigateToDetails(item.TodoId))">Detail</button></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (items != null)
+{
+    <input placeholder="Enter a new ToDo note" @bind="@newItemNote" />
+    <select @bind="@newItemDay">
+        <option value="">Select Day</option>
+        <option value="Sunday">Sunday</option>
+        <option value="Monday">Monday</option>
+        <option value="Tuesday">Tuesday</option>
+        <option value="Wednesday">Wednesday</option>
+        <option value="Thursday">Thursday</option>
+        <option value="Friday">Friday</option>
+        <option value="Saturday">Saturday</option>
+    </select>
+    <button class="btn btn-success" @onclick="AddTodo">Create</button>
+}
+
+<!-- Update Modal -->
+<div class="modal fade" id="updateModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="exampleModalLabel">Update ToDo</h5>
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <input placeholder="Update Note" @bind="updatedItemNote" class="form-control" />
+                <select @bind="updatedItemDay" class="form-control mt-2">
+                    <option value="">Select Day</option>
+                    <option value="Sunday">Sunday</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" @onclick="UpdateTodoAsync">Save changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<Todo> items = new List<Todo>();
+    private string newItemNote;
+    private string newItemDay;
+
+    // Fields for the item being updated
+    private string updatedItemNote;
+    private string updatedItemDay;
+    private Todo selectedItem; // The selected item to update
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTodos();
+    }
+
+    private async Task LoadTodos()
+    {
+        items = await ToDoService.GetTodosAsync(); // Example with page 1 and 1000 items
+    }
+
+    private async Task AddTodo()
+    {
+        if (!string.IsNullOrWhiteSpace(newItemNote) && !string.IsNullOrWhiteSpace(newItemDay))
+        {
+            var newTodoItem = new Todo
+                {
+                    Note = newItemNote,
+                    Day = newItemDay,
+                };
+
+            var response = await ToDoService.AddTodoAsync(newTodoItem);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTodos();
+                newItemNote = string.Empty;
+                newItemDay = string.Empty;
+            }
+        }
+    }
+
+    private async Task RemoveTodo(string id)
+    {
+        Console.WriteLine($"Removing Todo with ID: {id}");
+        var response = await ToDoService.DeleteTodoAsync(id);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine("Failed to delete the item.");
+        }
+        else
+        {
+            Console.WriteLine("Todo deleted successfully.");
+            await LoadTodos();
+        }
+    }
+
+    // Open the modal and populate the fields with the selected item's data
+    private void OpenUpdateModal(Todo item)
+    {
+        selectedItem = item;
+        updatedItemNote = item.Note;
+        updatedItemDay = item.Day;
+        // Use JSInterop to open the modal
+        JSRuntime.InvokeVoidAsync("$('#updateModal').modal", "show");
+    }
+
+    // Call the API to update the item
+    private async Task UpdateTodoAsync()
+    {
+        if (selectedItem != null && !string.IsNullOrWhiteSpace(updatedItemNote) && !string.IsNullOrWhiteSpace(updatedItemDay))
+        {
+            selectedItem.Note = updatedItemNote;
+            selectedItem.Day = updatedItemDay;
+
+            var response = await ToDoService.UpdateTodoAsync(selectedItem);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTodos();
+                // Use JSInterop to close the modal after updating
+                JSRuntime.InvokeVoidAsync("$('#updateModal').modal", "hide");
+            }
+        }
+    }
+    private void NavigateToDetails(string todoId)
+    {
+    NavigationManager.NavigateTo($"/todo-details/{todoId}");
+    }
+}
